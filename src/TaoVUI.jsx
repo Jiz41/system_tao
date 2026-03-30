@@ -613,8 +613,9 @@ AIエージェント群の判断権限が最上位承認者に移譲される
         borderBottom: "1px solid rgba(255,255,255,0.06)",
         position: "sticky", top: 0, zIndex: 20,
       }}>
-        <div style={{ fontSize: "10px", letterSpacing: "4px", color: "rgba(255,255,255,0.25)", marginBottom: "2px" }}>
-          SYSTEM:TAO · DEMO
+        <div style={{ fontSize: "10px", letterSpacing: "4px", color: "rgba(255,255,255,0.25)", marginBottom: "2px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>SYSTEM:TAO · DEMO</span>
+          <span style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "1px", color: "rgba(255,255,255,0.2)" }}>v0.1.0.0</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <div
