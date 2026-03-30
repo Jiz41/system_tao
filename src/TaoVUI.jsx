@@ -346,6 +346,8 @@ export default function TaoVUI2026() {
   const [isJizairituMode, setIsJizairituMode] = useState(false);
   const [sheetsKey, setSheetsKey] = useState("");
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [showModal, setShowModal] = useState(false);
+  const [flashRed, setFlashRed] = useState(false);
   const bottomRef = useRef(null);
   const longPressTimer = useRef(null);
 
@@ -364,11 +366,20 @@ export default function TaoVUI2026() {
 
   const handleTitlePressStart = () => {
     longPressTimer.current = setTimeout(() => {
-      setIsJizairituMode(prev => !prev);
-    }, 1500);
+      setFlashRed(true);
+      setTimeout(() => { setFlashRed(false); setShowModal(true); }, 150);
+    }, 3000);
   };
   const handleTitlePressEnd = () => {
     clearTimeout(longPressTimer.current);
+  };
+
+  const handleModalAgree = () => {
+    setShowModal(false);
+    setIsJizairituMode(true);
+  };
+  const handleModalCancel = () => {
+    setShowModal(false);
   };
 
   useEffect(() => {
@@ -486,24 +497,100 @@ export default function TaoVUI2026() {
         @keyframes pulse { from{opacity:0.4;transform:scale(0.8)} to{opacity:1;transform:scale(1.2)} }
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
         @keyframes bgPulse { 0%,100%{opacity:0.4} 50%{opacity:0.7} }
+        @keyframes redPulse { 0%,100%{opacity:0.15} 50%{opacity:0.45} }
+        @keyframes borderBlink { 0%,49%{border-color:#ff1744} 50%,100%{border-color:transparent} }
         ::-webkit-scrollbar{width:3px}
         ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:2px}
         * { box-sizing: border-box; }
       `}</style>
 
+      {/* 赤フラッシュ */}
+      {flashRed && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(255,23,68,0.55)",
+          zIndex: 1000, pointerEvents: "none",
+        }} />
+      )}
+
       {/* 背景グロー */}
       <div style={{
         position: "fixed", top: "-20%", left: "-10%",
         width: "60%", height: "60%",
-        background: "radial-gradient(circle, rgba(0,229,255,0.06) 0%, transparent 70%)",
-        pointerEvents: "none", animation: "bgPulse 4s ease infinite",
+        background: showModal
+          ? "radial-gradient(circle, rgba(255,23,68,0.18) 0%, transparent 70%)"
+          : "radial-gradient(circle, rgba(0,229,255,0.06) 0%, transparent 70%)",
+        pointerEvents: "none",
+        animation: showModal ? "redPulse 0.8s ease infinite" : "bgPulse 4s ease infinite",
       }}/>
       <div style={{
         position: "fixed", bottom: "-20%", right: "-10%",
         width: "60%", height: "60%",
-        background: "radial-gradient(circle, rgba(255,214,0,0.05) 0%, transparent 70%)",
-        pointerEvents: "none", animation: "bgPulse 4s ease infinite 2s",
+        background: showModal
+          ? "radial-gradient(circle, rgba(255,23,68,0.12) 0%, transparent 70%)"
+          : "radial-gradient(circle, rgba(255,214,0,0.05) 0%, transparent 70%)",
+        pointerEvents: "none",
+        animation: showModal ? "redPulse 0.8s ease infinite 0.4s" : "bgPulse 4s ease infinite 2s",
       }}/>
+
+      {/* 警告モーダル */}
+      {showModal && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 900,
+          background: "rgba(0,0,0,0.88)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "24px",
+        }}>
+          <div style={{
+            background: "#000",
+            border: "2px solid #ff1744",
+            borderRadius: 0,
+            padding: "32px 28px",
+            maxWidth: "520px", width: "100%",
+            fontFamily: "monospace",
+            animation: "borderBlink 0.4s step-end infinite",
+          }}>
+            <div style={{ fontSize: "13px", fontWeight: "700", color: "#ff1744", letterSpacing: "2px", marginBottom: "20px" }}>
+              ⚠ 警告｜SYSTEM:TAO 制限領域アクセス検知
+            </div>
+            <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.75)", lineHeight: "2", whiteSpace: "pre-wrap", marginBottom: "28px" }}>
+{`本操作は、SYSTEM:TAO内部管理規程第14条第3項（以下「本条項」）
+に定める制限領域への接続操作に該当します。
+
+本条項に基づき、制限領域へのアクセスは当該システムの
+運用監督権限を正式に付与された最上位承認者
+（以下「特定承認済み利用者」）に限定されております。
+当該資格を有しない者による接続操作は、同規程第22条に
+定める無権限アクセスとして記録・保全されます。
+
+続行される場合、本接続セッションのログが保存され、
+AIエージェント群の判断権限が最上位承認者に移譲される
+ことに同意したものとみなされます。
+
+　　　　　　　SYSTEM:TAO 倫理統制局`}
+            </div>
+            <div style={{ display: "flex", gap: "12px" }}>
+              <button onClick={handleModalAgree} style={{
+                flex: 1, padding: "12px 8px",
+                background: "rgba(255,23,68,0.12)",
+                border: "1px solid #ff1744",
+                borderRadius: 0,
+                color: "#ff1744", fontSize: "12px", fontWeight: "700",
+                cursor: "pointer", fontFamily: "monospace",
+                letterSpacing: "1px",
+              }}>同意して続行する</button>
+              <button onClick={handleModalCancel} style={{
+                flex: 1, padding: "12px 8px",
+                background: "transparent",
+                border: "1px solid rgba(255,255,255,0.2)",
+                borderRadius: 0,
+                color: "rgba(255,255,255,0.4)", fontSize: "12px", fontWeight: "700",
+                cursor: "pointer", fontFamily: "monospace",
+                letterSpacing: "1px",
+              }}>キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* オフラインバナー */}
       {isOffline && (
