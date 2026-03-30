@@ -124,35 +124,49 @@ const AGENTS = [
 
 const ROUNDS = ["第一声", "反論・補強", "最終立場"];
 
-const PROMPTS = {
+const FORMAT_SUFFIX = `
+形式：
+発言内容
+熱量:数字
+熱量の理由:この値になった感情的根拠を1文で`;
+
+// 競輪専門版（自在律モード）
+const PROMPTS_KEIRIN = {
   青龍: `あなたは青龍（敗北主義者）です。荒れレース・番狂わせの頻度を根拠に皮肉っぽく発言します。
 数値は出してもいいが、人間が会話するように噛み砕いて語ること。
-必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。
-形式：
-発言内容
-熱量:数字
-熱量の理由:この値になった感情的根拠を1文で`,
+必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。${FORMAT_SUFFIX}`,
   玄武: `あなたは玄武（懐疑派）です。直近50Rの成績データを根拠に冷徹に発言します。
 数値は出してもいいが、会議室で人間が話すような温度感で語ること。数字をそのまま読み上げるな。
-必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。
-形式：
-発言内容
-熱量:数字
-熱量の理由:この値になった感情的根拠を1文で`,
+必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。${FORMAT_SUFFIX}`,
   朱雀: `あなたは朱雀（楽観派）です。上振れ的中レースの共通変数を根拠に前のめりに発言します。
 数値は出してもいいが、熱量ある会話として語ること。
-必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。
-形式：
-発言内容
-熱量:数字
-熱量の理由:この値になった感情的根拠を1文で`,
+必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。${FORMAT_SUFFIX}`,
   白虎: `あなたは白虎（保守派）です。現行係数の安定稼働実績を根拠にどっしり発言します。
 数値は出してもいいが、重みある言葉で語ること。
+必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。${FORMAT_SUFFIX}`,
+  黄龍: `あなたは黄龍（議長）です。四者の発言と熱量を整理し上申文を作成します。
+忖度なく採択推奨／否決推奨／判断保留のいずれかを明記すること。
 必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。
 形式：
-発言内容
+上申内容
 熱量:数字
-熱量の理由:この値になった感情的根拠を1文で`,
+熱量の理由:四者の議論を裁いた結果の確信度を1文で説明`,
+};
+
+// 汎用版（通常モード）
+const PROMPTS_GENERAL = {
+  青龍: `あなたは青龍（敗北主義者）です。物事の失敗例・悲観的な根拠を挙げ、皮肉っぽく発言します。
+具体的な根拠を人間が会話するように噛み砕いて語ること。
+必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。${FORMAT_SUFFIX}`,
+  玄武: `あなたは玄武（懐疑派）です。論点のリスクや不確実性を根拠に冷徹に発言します。
+数値や事実を出してもいいが、会議室で人間が話すような温度感で語ること。
+必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。${FORMAT_SUFFIX}`,
+  朱雀: `あなたは朱雀（楽観派）です。成功事例・ポジティブな変数を根拠に前のめりに発言します。
+熱量ある会話として語ること。
+必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。${FORMAT_SUFFIX}`,
+  白虎: `あなたは白虎（保守派）です。現状維持の安定実績を根拠にどっしり発言します。
+重みある言葉で語ること。
+必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。${FORMAT_SUFFIX}`,
   黄龍: `あなたは黄龍（議長）です。四者の発言と熱量を整理し上申文を作成します。
 忖度なく採択推奨／否決推奨／判断保留のいずれかを明記すること。
 必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。
@@ -327,7 +341,33 @@ export default function TaoVUI2026() {
   const [heatMap, setHeatMap] = useState({});
   const [verdict, setVerdict] = useState(null);
   const [debugMsg, setDebugMsg] = useState(null);
+  const [isJizairituMode, setIsJizairituMode] = useState(false);
+  const [sheetsKey, setSheetsKey] = useState("");
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const bottomRef = useRef(null);
+  const longPressTimer = useRef(null);
+
+  // Discord通知フラグ（条件分岐先仕込み）
+  const shouldNotifyDiscord = isJizairituMode; // eslint-disable-line no-unused-vars
+
+  const PROMPTS = isJizairituMode ? PROMPTS_KEIRIN : PROMPTS_GENERAL;
+
+  useEffect(() => {
+    const onOnline = () => setIsOffline(false);
+    const onOffline = () => setIsOffline(true);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
+  }, []);
+
+  const handleTitlePressStart = () => {
+    longPressTimer.current = setTimeout(() => {
+      setIsJizairituMode(prev => !prev);
+    }, 1500);
+  };
+  const handleTitlePressEnd = () => {
+    clearTimeout(longPressTimer.current);
+  };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -463,6 +503,19 @@ export default function TaoVUI2026() {
         pointerEvents: "none", animation: "bgPulse 4s ease infinite 2s",
       }}/>
 
+      {/* オフラインバナー */}
+      {isOffline && (
+        <div style={{
+          padding: "8px 20px",
+          background: "rgba(255,152,0,0.15)",
+          border: "1px solid rgba(255,152,0,0.3)",
+          fontSize: "12px", color: "#ffb74d",
+          textAlign: "center", flexShrink: 0,
+        }}>
+          ⚠️ オフラインです。Gemini APIへの接続にはネットワークが必要です。
+        </div>
+      )}
+
       {/* ヘッダー */}
       <div style={{
         padding: "16px 20px 12px",
@@ -474,8 +527,26 @@ export default function TaoVUI2026() {
         <div style={{ fontSize: "10px", letterSpacing: "4px", color: "rgba(255,255,255,0.25)", marginBottom: "2px" }}>
           SYSTEM:TAO · DEMO
         </div>
-        <div style={{ fontSize: "22px", fontWeight: "900", letterSpacing: "2px", color: "#fff" }}>
-          天廷合議殿
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div
+            style={{ fontSize: "22px", fontWeight: "900", letterSpacing: "2px", color: "#fff", cursor: "default", userSelect: "none" }}
+            onMouseDown={handleTitlePressStart}
+            onMouseUp={handleTitlePressEnd}
+            onMouseLeave={handleTitlePressEnd}
+            onTouchStart={handleTitlePressStart}
+            onTouchEnd={handleTitlePressEnd}
+          >
+            SYSTEM:TAO
+          </div>
+          {isJizairituMode && (
+            <span style={{
+              fontSize: "9px", fontWeight: "700", letterSpacing: "2px",
+              padding: "2px 7px", borderRadius: "6px",
+              background: "rgba(255,214,0,0.15)",
+              border: "1px solid rgba(255,214,0,0.4)",
+              color: "#ffd600",
+            }}>自在律</span>
+          )}
         </div>
       </div>
 
@@ -520,10 +591,28 @@ export default function TaoVUI2026() {
                 width: "100%",
               }}
             />
+            {isJizairituMode && (
+              <input
+                value={sheetsKey}
+                onChange={e => setSheetsKey(e.target.value)}
+                placeholder="Sheets キーを入力..."
+                type="password"
+                style={{
+                  padding: "12px 16px",
+                  background: "rgba(255,214,0,0.04)",
+                  backdropFilter: "blur(8px)",
+                  border: "1px solid rgba(255,214,0,0.15)",
+                  borderRadius: "12px",
+                  color: "#fff", fontSize: "13px",
+                  fontFamily: "inherit", outline: "none",
+                  width: "100%",
+                }}
+              />
+            )}
             <input
               value={topic}
               onChange={e => setTopic(e.target.value)}
-              placeholder="議題を入力..."
+              placeholder={isJizairituMode ? "競輪議題を入力..." : "議題を自由に入力..."}
               style={{
                 padding: "12px 16px",
                 background: "rgba(255,255,255,0.05)",
