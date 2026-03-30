@@ -628,7 +628,7 @@ AIエージェント群の判断権限が最上位承認者に移譲される
       }}>
         <div style={{ fontSize: "10px", letterSpacing: "4px", color: "rgba(255,255,255,0.25)", marginBottom: "2px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span>SYSTEM:TAO · DEMO</span>
-          <span style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "1px", color: "rgba(255,255,255,0.2)" }}>v0.1.0.0</span>
+          <span style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "1px", color: "rgba(255,255,255,0.2)" }}>v0.1.1.0</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <div
