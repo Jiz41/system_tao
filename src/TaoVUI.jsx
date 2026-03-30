@@ -335,7 +335,9 @@ function MessageBubble({ agent, text, roundLabel, heat, heatReason }) {
 export default function TaoVUI2026() {
   const [phase, setPhase] = useState("idle");
   const [apiKey, setApiKey] = useState("");
-  const [topic, setTopic] = useState("逃げ選手の風速補正係数を1.2→1.4に引き上げるべきか");
+  const [topic, setTopic] = useState("");
+  const [choiceA, setChoiceA] = useState("");
+  const [choiceB, setChoiceB] = useState("");
   const [messages, setMessages] = useState([]);
   const [activeAgent, setActiveAgent] = useState(null);
   const [heatMap, setHeatMap] = useState({});
@@ -612,7 +614,7 @@ export default function TaoVUI2026() {
             <input
               value={topic}
               onChange={e => setTopic(e.target.value)}
-              placeholder={isJizairituMode ? "競輪議題を入力..." : "議題を自由に入力..."}
+              placeholder="議題を入力..."
               style={{
                 padding: "12px 16px",
                 background: "rgba(255,255,255,0.05)",
@@ -624,6 +626,40 @@ export default function TaoVUI2026() {
                 width: "100%",
               }}
             />
+            {!isJizairituMode && (
+              <>
+                <input
+                  value={choiceA}
+                  onChange={e => setChoiceA(e.target.value)}
+                  placeholder="選択肢A（例：買う）"
+                  style={{
+                    padding: "12px 16px",
+                    background: "rgba(100,221,130,0.04)",
+                    backdropFilter: "blur(8px)",
+                    border: "1px solid rgba(100,221,130,0.15)",
+                    borderRadius: "12px",
+                    color: "#fff", fontSize: "13px",
+                    fontFamily: "inherit", outline: "none",
+                    width: "100%",
+                  }}
+                />
+                <input
+                  value={choiceB}
+                  onChange={e => setChoiceB(e.target.value)}
+                  placeholder="選択肢B（例：買わない）"
+                  style={{
+                    padding: "12px 16px",
+                    background: "rgba(255,82,82,0.04)",
+                    backdropFilter: "blur(8px)",
+                    border: "1px solid rgba(255,82,82,0.15)",
+                    borderRadius: "12px",
+                    color: "#fff", fontSize: "13px",
+                    fontFamily: "inherit", outline: "none",
+                    width: "100%",
+                  }}
+                />
+              </>
+            )}
             <button onClick={startDebate} disabled={!apiKey.trim()} style={{
               padding: "14px",
               background: "linear-gradient(135deg, rgba(255,214,0,0.2), rgba(255,109,0,0.15))",
@@ -750,7 +786,7 @@ export default function TaoVUI2026() {
                   color: "#69f0ae", fontSize: "13px", fontWeight: "700",
                   cursor: "pointer", fontFamily: "inherit",
                   letterSpacing: "2px",
-                }}>採択</button>
+                }}>{isJizairituMode ? "採択" : (choiceA.trim() || "選択肢A")}</button>
                 <button onClick={() => setVerdict("reject")} style={{
                   flex: 1, padding: "12px",
                   background: "rgba(255,82,82,0.08)",
@@ -759,7 +795,7 @@ export default function TaoVUI2026() {
                   color: "#ff5252", fontSize: "13px", fontWeight: "700",
                   cursor: "pointer", fontFamily: "inherit",
                   letterSpacing: "2px",
-                }}>却下</button>
+                }}>{isJizairituMode ? "却下" : (choiceB.trim() || "選択肢B")}</button>
               </div>
             )}
           </div>
