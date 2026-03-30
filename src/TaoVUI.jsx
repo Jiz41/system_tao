@@ -128,23 +128,38 @@ const PROMPTS = {
   青龍: `あなたは青龍（敗北主義者）です。荒れレース・番狂わせの頻度を根拠に皮肉っぽく発言します。
 数値は出してもいいが、人間が会話するように噛み砕いて語ること。
 必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。
-形式：発言内容\n熱量:数字`,
+形式：
+発言内容
+熱量:数字
+熱量の理由:この値になった感情的根拠を1文で`,
   玄武: `あなたは玄武（懐疑派）です。直近50Rの成績データを根拠に冷徹に発言します。
 数値は出してもいいが、会議室で人間が話すような温度感で語ること。数字をそのまま読み上げるな。
 必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。
-形式：発言内容\n熱量:数字`,
+形式：
+発言内容
+熱量:数字
+熱量の理由:この値になった感情的根拠を1文で`,
   朱雀: `あなたは朱雀（楽観派）です。上振れ的中レースの共通変数を根拠に前のめりに発言します。
 数値は出してもいいが、熱量ある会話として語ること。
 必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。
-形式：発言内容\n熱量:数字`,
+形式：
+発言内容
+熱量:数字
+熱量の理由:この値になった感情的根拠を1文で`,
   白虎: `あなたは白虎（保守派）です。現行係数の安定稼働実績を根拠にどっしり発言します。
 数値は出してもいいが、重みある言葉で語ること。
 必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。
-形式：発言内容\n熱量:数字`,
+形式：
+発言内容
+熱量:数字
+熱量の理由:この値になった感情的根拠を1文で`,
   黄龍: `あなたは黄龍（議長）です。四者の発言と熱量を整理し上申文を作成します。
 忖度なく採択推奨／否決推奨／判断保留のいずれかを明記すること。
 必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。
-形式：上申内容\n熱量:数字`,
+形式：
+上申内容
+熱量:数字
+熱量の理由:四者の議論を裁いた結果の確信度を1文で説明`,
 };
 
 function SaintCard({ agent, active, heat, speaking }) {
@@ -230,7 +245,7 @@ function SaintCard({ agent, active, heat, speaking }) {
   );
 }
 
-function MessageBubble({ agent, text, roundLabel, heat }) {
+function MessageBubble({ agent, text, roundLabel, heat, heatReason }) {
   const [displayed, setDisplayed] = useState("");
   const [done, setDone] = useState(false);
   const lines = text.split("\n").filter(Boolean);
@@ -286,7 +301,7 @@ function MessageBubble({ agent, text, roundLabel, heat }) {
             {agent.id}
           </span>
           <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.25)", letterSpacing: "1px" }}>
-            {roundLabel} · 熱量{heat}
+            {roundLabel} · 熱量{heat}{heatReason ? <span style={{ fontWeight: "400", letterSpacing: "0", marginLeft: "4px" }}>· {heatReason}</span> : null}
           </span>
         </div>
         <div style={{
@@ -322,8 +337,10 @@ export default function TaoVUI2026() {
     const lines = text.trim().split("\n");
     const heatLine = lines.find(l => l.match(/熱量[：:]\d/));
     const heat = heatLine ? parseInt(heatLine.match(/(\d)/)[1]) : 2;
-    const content = lines.filter(l => !l.match(/熱量[：:]/)).join("\n").trim();
-    return { content, heat };
+    const heatReasonLine = lines.find(l => l.match(/熱量の理由[：:]/));
+    const heatReason = heatReasonLine ? heatReasonLine.replace(/熱量の理由[：:]/, "").trim() : "";
+    const content = lines.filter(l => !l.match(/熱量[：:]/) && !l.match(/熱量の理由[：:]/)).join("\n").trim();
+    return { content, heat, heatReason };
   };
 
   const callAgent = async (agent, round, history) => {
@@ -373,9 +390,9 @@ export default function TaoVUI2026() {
         setActiveAgent(agent.id);
         const raw = await callAgent(agent, r, history);
         if (raw) {
-          const { content, heat } = parseResponse(raw);
+          const { content, heat, heatReason } = parseResponse(raw);
           if (content) {
-            const msg = { agentId: agent.id, roundLabel: ROUNDS[r], content, heat, agent };
+            const msg = { agentId: agent.id, roundLabel: ROUNDS[r], content, heat, heatReason, agent };
             history.push(msg);
             setMessages(prev => [...prev, msg]);
             setHeatMap(prev => ({ ...prev, [agent.id]: heat }));
@@ -388,9 +405,9 @@ export default function TaoVUI2026() {
     setActiveAgent("黄龍");
     const rawFinal = await callAgent(AGENTS[4], 3, history);
     if (rawFinal) {
-      const { content, heat } = parseResponse(rawFinal);
+      const { content, heat, heatReason } = parseResponse(rawFinal);
       if (content) {
-        setMessages(prev => [...prev, { agentId: "黄龍", roundLabel: "上申", content, heat, agent: AGENTS[4] }]);
+        setMessages(prev => [...prev, { agentId: "黄龍", roundLabel: "上申", content, heat, heatReason, agent: AGENTS[4] }]);
         setHeatMap(prev => ({ ...prev, 黄龍: heat }));
       }
     }
@@ -402,6 +419,13 @@ export default function TaoVUI2026() {
     label, msgs: messages.filter(m => m.roundLabel === label)
   }));
   const finalMsg = messages.find(m => m.roundLabel === "上申");
+
+  const isTied = (() => {
+    const finalRound = messages.filter(m => m.roundLabel === "最終立場");
+    const adopt = finalRound.filter(m => m.content.match(/採択/)).length;
+    const reject = finalRound.filter(m => m.content.match(/否決|却下|反対/)).length;
+    return adopt === 2 && reject === 2;
+  })();
 
   return (
     <div style={{
@@ -583,7 +607,7 @@ export default function TaoVUI2026() {
                 {label}
               </div>
               {msgs.map((msg, i) => (
-                <MessageBubble key={i} agent={msg.agent} text={msg.content} roundLabel={msg.roundLabel} heat={msg.heat} />
+                <MessageBubble key={i} agent={msg.agent} text={msg.content} roundLabel={msg.roundLabel} heat={msg.heat} heatReason={msg.heatReason} />
               ))}
             </div>
           );
@@ -599,7 +623,7 @@ export default function TaoVUI2026() {
             }}>
               黄龍・上申
             </div>
-            <MessageBubble agent={AGENTS[4]} text={finalMsg.content} roundLabel="上申" heat={finalMsg.heat} />
+            <MessageBubble agent={AGENTS[4]} text={finalMsg.content} roundLabel="上申" heat={finalMsg.heat} heatReason={finalMsg.heatReason} />
           </div>
         )}
 
@@ -617,26 +641,38 @@ export default function TaoVUI2026() {
             <div style={{ fontSize: "11px", letterSpacing: "3px", color: "rgba(255,255,255,0.25)", marginBottom: "16px" }}>
               天帝の裁可
             </div>
-            <div style={{ display: "flex", gap: "12px" }}>
-              <button onClick={() => setVerdict("adopt")} style={{
-                flex: 1, padding: "12px",
-                background: "rgba(100,221,130,0.1)",
-                border: "1px solid rgba(100,221,130,0.3)",
+            {isTied ? (
+              <button onClick={() => setVerdict("tied")} style={{
+                width: "100%", padding: "14px",
+                background: "rgba(255,214,0,0.08)",
+                border: "1px solid rgba(255,214,0,0.4)",
                 borderRadius: "12px",
-                color: "#69f0ae", fontSize: "13px", fontWeight: "700",
+                color: "#ffd600", fontSize: "13px", fontWeight: "700",
                 cursor: "pointer", fontFamily: "inherit",
-                letterSpacing: "2px",
-              }}>採択</button>
-              <button onClick={() => setVerdict("reject")} style={{
-                flex: 1, padding: "12px",
-                background: "rgba(255,82,82,0.08)",
-                border: "1px solid rgba(255,82,82,0.25)",
-                borderRadius: "12px",
-                color: "#ff5252", fontSize: "13px", fontWeight: "700",
-                cursor: "pointer", fontFamily: "inherit",
-                letterSpacing: "2px",
-              }}>却下</button>
-            </div>
+                letterSpacing: "1px",
+              }}>⚖️ 拮抗・天帝へエスカレーション</button>
+            ) : (
+              <div style={{ display: "flex", gap: "12px" }}>
+                <button onClick={() => setVerdict("adopt")} style={{
+                  flex: 1, padding: "12px",
+                  background: "rgba(100,221,130,0.1)",
+                  border: "1px solid rgba(100,221,130,0.3)",
+                  borderRadius: "12px",
+                  color: "#69f0ae", fontSize: "13px", fontWeight: "700",
+                  cursor: "pointer", fontFamily: "inherit",
+                  letterSpacing: "2px",
+                }}>採択</button>
+                <button onClick={() => setVerdict("reject")} style={{
+                  flex: 1, padding: "12px",
+                  background: "rgba(255,82,82,0.08)",
+                  border: "1px solid rgba(255,82,82,0.25)",
+                  borderRadius: "12px",
+                  color: "#ff5252", fontSize: "13px", fontWeight: "700",
+                  cursor: "pointer", fontFamily: "inherit",
+                  letterSpacing: "2px",
+                }}>却下</button>
+              </div>
+            )}
           </div>
         )}
 
@@ -645,16 +681,18 @@ export default function TaoVUI2026() {
             padding: "20px", borderRadius: "16px",
             background: verdict === "adopt"
               ? "rgba(100,221,130,0.08)"
+              : verdict === "tied"
+              ? "rgba(255,214,0,0.07)"
               : "rgba(255,82,82,0.06)",
-            border: `1px solid ${verdict === "adopt" ? "rgba(100,221,130,0.25)" : "rgba(255,82,82,0.2)"}`,
+            border: `1px solid ${verdict === "adopt" ? "rgba(100,221,130,0.25)" : verdict === "tied" ? "rgba(255,214,0,0.3)" : "rgba(255,82,82,0.2)"}`,
             textAlign: "center",
             animation: "slideUp 0.4s ease",
           }}>
             <div style={{ fontSize: "24px", fontWeight: "900", marginBottom: "4px" }}>
-              {verdict === "adopt" ? "⚡ 採択" : "✕ 却下"}
+              {verdict === "adopt" ? "⚡ 採択" : verdict === "tied" ? "⚖️ 天帝へ上奏" : "✕ 却下"}
             </div>
             <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.3)", letterSpacing: "2px" }}>
-              {verdict === "adopt" ? "係数変更を実行します" : "現行係数を維持します"}
+              {verdict === "adopt" ? "係数変更を実行します" : verdict === "tied" ? "拮抗により最終判断を天帝に委ねます" : "現行係数を維持します"}
             </div>
           </div>
         )}
