@@ -334,18 +334,30 @@ export default function TaoVUI2026() {
       ? "前の者たちの発言を受けて反論または補強せよ。"
       : "採択か否決か、最終立場を明確にせよ。";
 
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        system: PROMPTS[agent.id],
-        messages: [{ role: "user", content: `議題：${topic}\n指示：${roundInst}\n\n議事録：\n${historyText || "（なし）"}` }],
-      }),
-    });
-    const data = await res.json();
-    return data.content?.[0]?.text || "（応答なし）\n熱量:1";
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: PROMPTS[agent.id] }] },
+            contents: [{ role: "user", parts: [{ text: `議題：${topic}\n指示：${roundInst}\n\n議事録：\n${historyText || "（なし）"}` }] }],
+            generationConfig: { maxOutputTokens: 512, temperature: 0.85 },
+          }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        const errMsg = data.error?.message || `HTTP ${res.status}`;
+        setDebugMsg(`[${agent.id}] APIエラー: ${errMsg}`);
+        return "（応答なし）\n熱量:1";
+      }
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || "（応答なし）\n熱量:1";
+    } catch (e) {
+      setDebugMsg(`[${agent.id}] ネットワークエラー: ${e.message}`);
+      return "（応答なし）\n熱量:1";
+    }
   };
 
   const startDebate = async () => {
@@ -393,7 +405,7 @@ export default function TaoVUI2026() {
 
   return (
     <div style={{
-      minHeight: "100vh",
+      height: "100vh",
       background: "linear-gradient(160deg, #0d0d1a 0%, #0a0f1e 50%, #0d0a14 100%)",
       color: "#fff",
       fontFamily: "'Noto Sans JP', system-ui, sans-serif",
@@ -451,7 +463,7 @@ export default function TaoVUI2026() {
         background: "rgba(255,255,255,0.02)",
         backdropFilter: "blur(12px)",
         borderBottom: "1px solid rgba(255,255,255,0.05)",
-        position: "sticky", top: "64px", zIndex: 19,
+        flexShrink: 0,
       }}>
         {AGENTS.map(agent => (
           <SaintCard
@@ -471,7 +483,7 @@ export default function TaoVUI2026() {
             <input
               value={apiKey}
               onChange={e => setApiKey(e.target.value)}
-              placeholder="Gemini APIキーを入力..."
+              placeholder="Gemini API キーを入力..."
               type="password"
               style={{
                 padding: "12px 16px",
@@ -556,7 +568,7 @@ export default function TaoVUI2026() {
       )}
 
       {/* ログ */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "8px 20px 20px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "8px 20px 20px", minHeight: 0 }}>
         {roundSections.map(({ label, msgs }, ri) => {
           if (!msgs.length) return null;
           return (
