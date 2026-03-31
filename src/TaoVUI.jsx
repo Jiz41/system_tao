@@ -149,6 +149,7 @@ const PROMPTS_KEIRIN = {
 必ず3〜4文で発言を収めること。長くなりそうなら要点だけ絞れ。途中で終わるな。
 形式：
 上申内容
+【参照データ】根拠にした統計数値を必ず一つ以上引用すること（例：晴天令的中率24%など）
 熱量:数字
 熱量の理由:四者の議論を裁いた結果の確信度を1文で説明`,
 };
@@ -176,6 +177,15 @@ const PROMPTS_GENERAL = {
 熱量:数字
 熱量の理由:四者の議論を裁いた結果の確信度を1文で説明`,
 };
+
+// 議題カテゴリ一覧（自在律モード用スイッチ）
+const DATA_CATEGORIES = [
+  { key: "all",   label: "全体" },
+  { key: "venue", label: "開催場" },
+  { key: "tenun", label: "天雲指数" },
+  { key: "wind",  label: "風速" },
+  { key: "odds",  label: "オッズ" },
+];
 
 function SaintCard({ agent, active, heat, speaking }) {
   const Sprite = SAINT_SPRITES[agent.id];
@@ -346,6 +356,7 @@ export default function TaoVUI2026() {
   const [debugMsg, setDebugMsg] = useState(null);
   const [isJizairituMode, setIsJizairituMode] = useState(false);
   const [sheetsKey, setSheetsKey] = useState("");
+  const [dataCategory, setDataCategory] = useState("all");
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [showModal, setShowModal] = useState(false);
   const [flashRed, setFlashRed] = useState(false);
@@ -397,7 +408,7 @@ export default function TaoVUI2026() {
     return { content, heat, heatReason };
   };
 
-  const fetchSheetsData = async () => {
+  const fetchSheetsData = async (category = "all") => {
     const SHEETS_ID = "1S9U_AR4dM8tKTUTKx3_wAJBLW5x4zB3h7annjv7z8iw";
     try {
       const range = encodeURIComponent("データ入力!A:Q");
@@ -416,77 +427,96 @@ export default function TaoVUI2026() {
       const dataRows = rows.slice(1).slice(-200);
       const N = dataRows.length;
 
-      // 列インデックス (0始まり): A=0,B=1,C=2,D=3,E=4,F=5,G=6,H=7,I=8,J=9,K=10,L=11,M=12,N=13,O=14,P=15,Q=16
       const pct = (n, d) => d === 0 ? "0%" : `${Math.round(n / d * 100)}%`;
 
-      // 晴天令的中 (G列=index6が"T")
+      // 基本的中行（全カテゴリ共通）
       const sunHit = dataRows.filter(r => (r[6] || "") === "T");
-      // 荒天令的中 (H列=index7が"T")
       const rainHit = dataRows.filter(r => (r[7] || "") === "T");
-      // 総合判定採択 (I列=index8が"🎯的中")
       const judgeCount = dataRows.filter(r => (r[8] || "").includes("🎯的中")).length;
 
-      // 天雲指数別 (C列=index2): 実値 "0"/"33"/"66"/"100"
-      const tenunGroups = { "0": [], "33": [], "66": [], "100": [] };
-      dataRows.forEach(r => {
-        const key = (r[2] || "").trim();
-        if (tenunGroups[key]) tenunGroups[key].push(r);
-      });
-      const tenunSunPct = (key) => pct(tenunGroups[key].filter(r => (r[6] || "") === "T").length, tenunGroups[key].length);
-      const tenunRainPct = (key) => pct(tenunGroups[key].filter(r => (r[7] || "") === "T").length, tenunGroups[key].length);
-
-      // 開催場別 (B列=index1)
-      const venueMap = {};
-      dataRows.forEach(r => {
-        const v = (r[1] || "不明").trim();
-        if (!venueMap[v]) venueMap[v] = { sun: 0, rain: 0, total: 0 };
-        venueMap[v].total++;
-        if ((r[6] || "") === "T") venueMap[v].sun++;
-        if ((r[7] || "") === "T") venueMap[v].rain++;
-      });
-      const venueList = Object.entries(venueMap).filter(([, v]) => v.total >= 3);
-      const top3Sun = [...venueList].sort((a, b) => b[1].sun / b[1].total - a[1].sun / a[1].total).slice(0, 3)
-        .map(([name, v]) => `${name} ${pct(v.sun, v.total)}`).join(", ");
-      const top3Rain = [...venueList].sort((a, b) => b[1].rain / b[1].total - a[1].rain / a[1].total).slice(0, 3)
-        .map(([name, v]) => `${name} ${pct(v.rain, v.total)}`).join(", ");
-
-      // 平均オッズ的中時 (N=index13, O=index14, P=index15)
-      const avgOdds = (col, hitRows) => {
-        const vals = hitRows.map(r => parseFloat((r[col] || "").replace(",", ""))).filter(v => !isNaN(v) && v > 0);
-        return vals.length ? { avg: (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1), n: vals.length } : null;
-      };
-      const fmtOdds = (col, hitRows) => {
-        const r = avgOdds(col, hitRows);
-        return r ? `${r.avg}倍` : "データなし";
-      };
-      const oddsLine = (() => {
-        const parts = [
-          ["3連単", avgOdds(13, sunHit)],
-          ["3連複", avgOdds(14, sunHit)],
-          ["2車単", avgOdds(15, sunHit)],
-        ].map(([name, r]) => `${name} ${r ? r.avg + "倍" : "データなし"}`).join(" / ");
-        return parts;
-      })();
-
-      const summary = `【直近${N}R成績サマリー】
+      const baseSection = `【直近${N}R成績サマリー / カテゴリ: ${DATA_CATEGORIES.find(c => c.key === category)?.label || "全体"}】
 総レース数: ${N}
 的中率（晴天令）: ${pct(sunHit.length, N)} (${sunHit.length}/${N})
 的中率（荒天令）: ${pct(rainHit.length, N)} (${rainHit.length}/${N})
-総合判定 採択率: ${pct(judgeCount, N)}
+総合判定 採択率: ${pct(judgeCount, N)}`;
 
-天雲指数別的中率（晴天令）:
-  0: ${tenunSunPct("0")} / 33: ${tenunSunPct("33")} / 66: ${tenunSunPct("66")} / 100: ${tenunSunPct("100")}
+      // 天雲指数別 (C列=index2): 実値 "0"/"33"/"66"/"100"
+      const buildTenunSection = () => {
+        const tenunGroups = { "0": [], "33": [], "66": [], "100": [] };
+        dataRows.forEach(r => {
+          const key = (r[2] || "").trim();
+          if (tenunGroups[key]) tenunGroups[key].push(r);
+        });
+        const sp = (key) => pct(tenunGroups[key].filter(r => (r[6] || "") === "T").length, tenunGroups[key].length);
+        const rp = (key) => pct(tenunGroups[key].filter(r => (r[7] || "") === "T").length, tenunGroups[key].length);
+        return `天雲指数別的中率（晴天令）:
+  0: ${sp("0")} / 33: ${sp("33")} / 66: ${sp("66")} / 100: ${sp("100")}
 天雲指数別的中率（荒天令）:
-  0: ${tenunRainPct("0")} / 33: ${tenunRainPct("33")} / 66: ${tenunRainPct("66")} / 100: ${tenunRainPct("100")}
+  0: ${rp("0")} / 33: ${rp("33")} / 66: ${rp("66")} / 100: ${rp("100")}`;
+      };
 
-開催場別的中率TOP3（晴天令）:
+      // 開催場別 (B列=index1)
+      const buildVenueSection = () => {
+        const venueMap = {};
+        dataRows.forEach(r => {
+          const v = (r[1] || "不明").trim();
+          if (!venueMap[v]) venueMap[v] = { sun: 0, rain: 0, total: 0 };
+          venueMap[v].total++;
+          if ((r[6] || "") === "T") venueMap[v].sun++;
+          if ((r[7] || "") === "T") venueMap[v].rain++;
+        });
+        const venueList = Object.entries(venueMap).filter(([, v]) => v.total >= 3);
+        const top3Sun = [...venueList].sort((a, b) => b[1].sun / b[1].total - a[1].sun / a[1].total).slice(0, 3)
+          .map(([name, v]) => `${name} ${pct(v.sun, v.total)}`).join(", ");
+        const top3Rain = [...venueList].sort((a, b) => b[1].rain / b[1].total - a[1].rain / a[1].total).slice(0, 3)
+          .map(([name, v]) => `${name} ${pct(v.rain, v.total)}`).join(", ");
+        return `開催場別的中率TOP3（晴天令）:
   ${top3Sun || "データ不足"}
 開催場別的中率TOP3（荒天令）:
-  ${top3Rain || "データ不足"}
+  ${top3Rain || "データ不足"}`;
+      };
 
-平均オッズ（的中時）: ${oddsLine}`;
+      // 風速別 (S列=index18): "（方向 X.Xm）" → m数値を抽出
+      const buildWindSection = () => {
+        const windGroups = { "無風": [], "弱風(1-2m)": [], "中風(3-4m)": [], "強風(5m+)": [] };
+        dataRows.forEach(r => {
+          const raw = (r[18] || "").trim();
+          const m = parseFloat(raw.replace(/[^0-9.]/g, "") || "0");
+          const key = m === 0 ? "無風" : m <= 2 ? "弱風(1-2m)" : m <= 4 ? "中風(3-4m)" : "強風(5m+)";
+          windGroups[key].push(r);
+        });
+        const lines = Object.entries(windGroups).map(([label, rows]) => {
+          const n = rows.length;
+          if (n === 0) return null;
+          const s = rows.filter(r => (r[6] || "") === "T").length;
+          const rr = rows.filter(r => (r[7] || "") === "T").length;
+          return `  ${label}(${n}件): 晴天令 ${pct(s, n)} / 荒天令 ${pct(rr, n)}`;
+        }).filter(Boolean).join("\n");
+        return `風速帯別的中率:\n${lines}`;
+      };
 
-      return summary;
+      // 平均オッズ (N=index13, O=index14, P=index15)
+      const buildOddsSection = () => {
+        const avgOdds = (col, hitRows) => {
+          const vals = hitRows.map(r => parseFloat((r[col] || "").replace(",", ""))).filter(v => !isNaN(v) && v > 0);
+          return vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : null;
+        };
+        const line = [
+          ["3連単", avgOdds(13, sunHit)],
+          ["3連複", avgOdds(14, sunHit)],
+          ["2車単", avgOdds(15, sunHit)],
+        ].map(([name, v]) => `${name} ${v ? v + "倍" : "データなし"}`).join(" / ");
+        return `平均オッズ（的中時）: ${line}`;
+      };
+
+      // カテゴリ別にセクションを選択
+      const sections = [baseSection];
+      if (category === "all" || category === "tenun") sections.push(buildTenunSection());
+      if (category === "all" || category === "venue") sections.push(buildVenueSection());
+      if (category === "all" || category === "wind")  sections.push(buildWindSection());
+      if (category === "all" || category === "odds")  sections.push(buildOddsSection());
+
+      return sections.join("\n\n");
     } catch (e) {
       setDebugMsg(`[Sheets] ネットワークエラー: ${e.message}`);
       return null;
@@ -550,7 +580,7 @@ export default function TaoVUI2026() {
     // 自在律モード時のみSheetsデータ取得
     let sheetsLog = null;
     if (isJizairituMode && sheetsKey.trim()) {
-      sheetsLog = await fetchSheetsData();
+      sheetsLog = await fetchSheetsData(dataCategory);
     }
 
     for (let r = 0; r < 3; r++) {
@@ -730,7 +760,7 @@ AIエージェント群の判断権限が最上位承認者に移譲される
       }}>
         <div style={{ fontSize: "10px", letterSpacing: "4px", color: "rgba(255,255,255,0.25)", marginBottom: "2px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span>SYSTEM:TAO · DEMO</span>
-          <span style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "1px", color: "rgba(255,255,255,0.2)" }}>v0.1.2.4</span>
+          <span style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "1px", color: "rgba(255,255,255,0.2)" }}>v0.1.3.0</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <div
@@ -797,22 +827,46 @@ AIエージェント群の判断権限が最上位承認者に移譲される
               }}
             />
             {isJizairituMode && (
-              <input
-                value={sheetsKey}
-                onChange={e => setSheetsKey(e.target.value)}
-                placeholder="Sheets キーを入力..."
-                type="password"
-                style={{
-                  padding: "12px 16px",
-                  background: "rgba(255,214,0,0.04)",
-                  backdropFilter: "blur(8px)",
-                  border: "1px solid rgba(255,214,0,0.15)",
-                  borderRadius: "12px",
-                  color: "#fff", fontSize: "13px",
-                  fontFamily: "inherit", outline: "none",
-                  width: "100%",
-                }}
-              />
+              <>
+                <input
+                  value={sheetsKey}
+                  onChange={e => setSheetsKey(e.target.value)}
+                  placeholder="Sheets キーを入力..."
+                  type="password"
+                  style={{
+                    padding: "12px 16px",
+                    background: "rgba(255,214,0,0.04)",
+                    backdropFilter: "blur(8px)",
+                    border: "1px solid rgba(255,214,0,0.15)",
+                    borderRadius: "12px",
+                    color: "#fff", fontSize: "13px",
+                    fontFamily: "inherit", outline: "none",
+                    width: "100%",
+                  }}
+                />
+                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                  {DATA_CATEGORIES.map(cat => (
+                    <button
+                      key={cat.key}
+                      onClick={() => setDataCategory(cat.key)}
+                      style={{
+                        padding: "5px 12px",
+                        borderRadius: "20px",
+                        border: dataCategory === cat.key
+                          ? "1px solid #ffd600"
+                          : "1px solid rgba(255,255,255,0.15)",
+                        background: dataCategory === cat.key
+                          ? "rgba(255,214,0,0.15)"
+                          : "rgba(255,255,255,0.04)",
+                        color: dataCategory === cat.key ? "#ffd600" : "rgba(255,255,255,0.5)",
+                        fontSize: "11px", cursor: "pointer", fontFamily: "inherit",
+                      }}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
             <input
               value={topic}
