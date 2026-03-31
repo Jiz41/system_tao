@@ -71,8 +71,8 @@ export function buildVenueSection(dataRows) {
 export function buildSeasonSection(dataRows) {
   const groups = { "春(3-5月)": [], "夏(6-8月)": [], "秋(9-11月)": [], "冬(12-2月)": [] };
   dataRows.forEach(r => {
-    const raw = (r[0] || "").trim(); // 例: "2025/03/15" or "3/15"
-    const m = parseInt((raw.match(/[\/\-](\d{1,2})[\/\-]/) || raw.match(/^(\d{1,2})[\/\-]/) || [])[1] || "0", 10);
+    const raw = (r[0] || "").trim(); // 例: "2025/12/05"
+    const m = parseInt(raw.split("/")[1] || "0", 10);
     const key = (m >= 3 && m <= 5) ? "春(3-5月)"
               : (m >= 6 && m <= 8) ? "夏(6-8月)"
               : (m >= 9 && m <= 11) ? "秋(9-11月)"
