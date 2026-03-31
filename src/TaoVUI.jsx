@@ -400,8 +400,9 @@ export default function TaoVUI2026() {
   const fetchSheetsData = async () => {
     const SHEETS_ID = "1S9U_AR4dM8tKTUTKx3_wAJBLW5x4zB3h7annjv7z8iw";
     try {
+      const range = encodeURIComponent("データ入力!A:Q");
       const res = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${encodeURIComponent('データ入力')}?key=${sheetsKey}`
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${range}?key=${sheetsKey}`
       );
       const data = await res.json();
       if (!res.ok) {
@@ -410,10 +411,72 @@ export default function TaoVUI2026() {
       }
       const rows = data.values || [];
       if (rows.length < 2) return null;
-      const header = rows[0];
-      const dataRows = rows.slice(1).slice(-20);
-      const formatted = [header, ...dataRows].map(r => r.join("\t")).join("\n");
-      return formatted;
+
+      // ヘッダー除く直近200行
+      const dataRows = rows.slice(1).slice(-200);
+      const N = dataRows.length;
+
+      // 列インデックス (0始まり): A=0,B=1,C=2,D=3,E=4,F=5,G=6,H=7,I=8,J=9,K=10,L=11,M=12,N=13,O=14,P=15,Q=16
+      const pct = (n, d) => d === 0 ? "0%" : `${Math.round(n / d * 100)}%`;
+
+      // 晴天令的中 (G列=index6がTRUE)
+      const sunHit = dataRows.filter(r => (r[6] || "").toUpperCase() === "TRUE");
+      // 荒天令的中 (H列=index7がTRUE)
+      const rainHit = dataRows.filter(r => (r[7] || "").toUpperCase() === "TRUE");
+      // 総合判定採択 (I列=index8が空でない)
+      const judgeCount = dataRows.filter(r => (r[8] || "").trim() !== "").length;
+
+      // 天雲指数別 (C列=index2)
+      const tenunGroups = { "0": [], "1": [], "2+": [] };
+      dataRows.forEach(r => {
+        const v = parseInt(r[2] || "0", 10);
+        const key = v === 0 ? "0" : v === 1 ? "1" : "2+";
+        tenunGroups[key].push(r);
+      });
+      const tenunSunPct = (key) => pct(tenunGroups[key].filter(r => (r[6] || "").toUpperCase() === "TRUE").length, tenunGroups[key].length);
+      const tenunRainPct = (key) => pct(tenunGroups[key].filter(r => (r[7] || "").toUpperCase() === "TRUE").length, tenunGroups[key].length);
+
+      // 開催場別 (B列=index1)
+      const venueMap = {};
+      dataRows.forEach(r => {
+        const v = (r[1] || "不明").trim();
+        if (!venueMap[v]) venueMap[v] = { sun: 0, rain: 0, total: 0 };
+        venueMap[v].total++;
+        if ((r[6] || "").toUpperCase() === "TRUE") venueMap[v].sun++;
+        if ((r[7] || "").toUpperCase() === "TRUE") venueMap[v].rain++;
+      });
+      const venueList = Object.entries(venueMap).filter(([, v]) => v.total >= 3);
+      const top3Sun = [...venueList].sort((a, b) => b[1].sun / b[1].total - a[1].sun / a[1].total).slice(0, 3)
+        .map(([name, v]) => `${name} ${pct(v.sun, v.total)}`).join(", ");
+      const top3Rain = [...venueList].sort((a, b) => b[1].rain / b[1].total - a[1].rain / a[1].total).slice(0, 3)
+        .map(([name, v]) => `${name} ${pct(v.rain, v.total)}`).join(", ");
+
+      // 平均オッズ的中時 (N=index13, O=index14, P=index15)
+      const avgOdds = (col, hitRows) => {
+        const vals = hitRows.map(r => parseFloat((r[col] || "0").replace(",", ""))).filter(v => !isNaN(v) && v > 0);
+        return vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : "-";
+      };
+
+      const summary = `【直近${N}R成績サマリー】
+総レース数: ${N}
+的中率（晴天令）: ${pct(sunHit.length, N)} (${sunHit.length}/${N})
+的中率（荒天令）: ${pct(rainHit.length, N)} (${rainHit.length}/${N})
+総合判定 採択率: ${pct(judgeCount, N)}
+
+天雲指数別的中率（晴天令）:
+  0: ${tenunSunPct("0")} / 1: ${tenunSunPct("1")} / 2以上: ${tenunSunPct("2+")}
+天雲指数別的中率（荒天令）:
+  0: ${tenunRainPct("0")} / 1: ${tenunRainPct("1")} / 2以上: ${tenunRainPct("2+")}
+
+開催場別的中率TOP3（晴天令）:
+  ${top3Sun || "データ不足"}
+開催場別的中率TOP3（荒天令）:
+  ${top3Rain || "データ不足"}
+
+平均オッズ（的中時）:
+  3連単: ${avgOdds(13, sunHit)}倍 / 3連複: ${avgOdds(14, sunHit)}倍 / 2車単: ${avgOdds(15, sunHit)}倍`;
+
+      return summary;
     } catch (e) {
       setDebugMsg(`[Sheets] ネットワークエラー: ${e.message}`);
       return null;
