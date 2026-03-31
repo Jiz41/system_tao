@@ -419,12 +419,12 @@ export default function TaoVUI2026() {
       // 列インデックス (0始まり): A=0,B=1,C=2,D=3,E=4,F=5,G=6,H=7,I=8,J=9,K=10,L=11,M=12,N=13,O=14,P=15,Q=16
       const pct = (n, d) => d === 0 ? "0%" : `${Math.round(n / d * 100)}%`;
 
-      // 晴天令的中 (G列=index6がTRUE)
-      const sunHit = dataRows.filter(r => (r[6] || "").toUpperCase() === "TRUE");
-      // 荒天令的中 (H列=index7がTRUE)
-      const rainHit = dataRows.filter(r => (r[7] || "").toUpperCase() === "TRUE");
-      // 総合判定採択 (I列=index8が空でない)
-      const judgeCount = dataRows.filter(r => (r[8] || "").trim() !== "").length;
+      // 晴天令的中 (G列=index6が"T")
+      const sunHit = dataRows.filter(r => (r[6] || "") === "T");
+      // 荒天令的中 (H列=index7が"T")
+      const rainHit = dataRows.filter(r => (r[7] || "") === "T");
+      // 総合判定採択 (I列=index8が"🎯的中")
+      const judgeCount = dataRows.filter(r => (r[8] || "").includes("🎯的中")).length;
 
       // 天雲指数別 (C列=index2)
       const tenunGroups = { "0": [], "1": [], "2+": [] };
@@ -433,8 +433,8 @@ export default function TaoVUI2026() {
         const key = v === 0 ? "0" : v === 1 ? "1" : "2+";
         tenunGroups[key].push(r);
       });
-      const tenunSunPct = (key) => pct(tenunGroups[key].filter(r => (r[6] || "").toUpperCase() === "TRUE").length, tenunGroups[key].length);
-      const tenunRainPct = (key) => pct(tenunGroups[key].filter(r => (r[7] || "").toUpperCase() === "TRUE").length, tenunGroups[key].length);
+      const tenunSunPct = (key) => pct(tenunGroups[key].filter(r => (r[6] || "") === "T").length, tenunGroups[key].length);
+      const tenunRainPct = (key) => pct(tenunGroups[key].filter(r => (r[7] || "") === "T").length, tenunGroups[key].length);
 
       // 開催場別 (B列=index1)
       const venueMap = {};
@@ -442,8 +442,8 @@ export default function TaoVUI2026() {
         const v = (r[1] || "不明").trim();
         if (!venueMap[v]) venueMap[v] = { sun: 0, rain: 0, total: 0 };
         venueMap[v].total++;
-        if ((r[6] || "").toUpperCase() === "TRUE") venueMap[v].sun++;
-        if ((r[7] || "").toUpperCase() === "TRUE") venueMap[v].rain++;
+        if ((r[6] || "") === "T") venueMap[v].sun++;
+        if ((r[7] || "") === "T") venueMap[v].rain++;
       });
       const venueList = Object.entries(venueMap).filter(([, v]) => v.total >= 3);
       const top3Sun = [...venueList].sort((a, b) => b[1].sun / b[1].total - a[1].sun / a[1].total).slice(0, 3)
@@ -720,7 +720,7 @@ AIエージェント群の判断権限が最上位承認者に移譲される
       }}>
         <div style={{ fontSize: "10px", letterSpacing: "4px", color: "rgba(255,255,255,0.25)", marginBottom: "2px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span>SYSTEM:TAO · DEMO</span>
-          <span style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "1px", color: "rgba(255,255,255,0.2)" }}>v0.1.2.1</span>
+          <span style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "1px", color: "rgba(255,255,255,0.2)" }}>v0.1.2.2</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <div
