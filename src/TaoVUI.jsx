@@ -397,7 +397,30 @@ export default function TaoVUI2026() {
     return { content, heat, heatReason };
   };
 
-  const callAgent = async (agent, round, history) => {
+  const fetchSheetsData = async () => {
+    const SHEETS_ID = "1S9U_AR4dM8tKTUTKx3_wAJBLW5x4zB3h7annjv7z8iw";
+    try {
+      const res = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEETS_ID}/values/${encodeURIComponent('データ入力')}?key=${sheetsKey}`
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setDebugMsg(`[Sheets] 取得エラー: ${data.error?.message || `HTTP ${res.status}`}`);
+        return null;
+      }
+      const rows = data.values || [];
+      if (rows.length < 2) return null;
+      const header = rows[0];
+      const dataRows = rows.slice(1).slice(-20);
+      const formatted = [header, ...dataRows].map(r => r.join("\t")).join("\n");
+      return formatted;
+    } catch (e) {
+      setDebugMsg(`[Sheets] ネットワークエラー: ${e.message}`);
+      return null;
+    }
+  };
+
+  const callAgent = async (agent, round, history, sheetsLog = null) => {
     const historyText = history.map(m => `【${m.agentId}・${m.roundLabel}】\n${m.content}`).join("\n\n");
     const roundInst = isJizairituMode
       ? (round === 0
@@ -424,7 +447,7 @@ export default function TaoVUI2026() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            system_instruction: { parts: [{ text: PROMPTS[agent.id] }] },
+            system_instruction: { parts: [{ text: PROMPTS[agent.id] + (isJizairituMode && sheetsLog ? `\n\n【直近成績ログ】\n${sheetsLog}` : "") }] },
             contents: [{ role: "user", parts: [{ text: userText }] }],
             generationConfig: { temperature: 0.85 },
           }),
@@ -451,10 +474,16 @@ export default function TaoVUI2026() {
     const history = [];
     const saints = AGENTS.slice(0, 4);
 
+    // 自在律モード時のみSheetsデータ取得
+    let sheetsLog = null;
+    if (isJizairituMode && sheetsKey.trim()) {
+      sheetsLog = await fetchSheetsData();
+    }
+
     for (let r = 0; r < 3; r++) {
       for (const agent of saints) {
         setActiveAgent(agent.id);
-        const raw = await callAgent(agent, r, history);
+        const raw = await callAgent(agent, r, history, sheetsLog);
         if (raw) {
           const { content, heat, heatReason } = parseResponse(raw);
           if (content) {
@@ -469,7 +498,7 @@ export default function TaoVUI2026() {
     }
 
     setActiveAgent("黄龍");
-    const rawFinal = await callAgent(AGENTS[4], 3, history);
+    const rawFinal = await callAgent(AGENTS[4], 3, history, sheetsLog);
     if (rawFinal) {
       const { content, heat, heatReason } = parseResponse(rawFinal);
       if (content) {
