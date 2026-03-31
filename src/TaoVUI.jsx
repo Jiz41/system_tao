@@ -426,12 +426,11 @@ export default function TaoVUI2026() {
       // 総合判定採択 (I列=index8が"🎯的中")
       const judgeCount = dataRows.filter(r => (r[8] || "").includes("🎯的中")).length;
 
-      // 天雲指数別 (C列=index2)
-      const tenunGroups = { "0": [], "1": [], "2+": [] };
+      // 天雲指数別 (C列=index2): 実値 "0"/"33"/"66"/"100"
+      const tenunGroups = { "0": [], "33": [], "66": [], "100": [] };
       dataRows.forEach(r => {
-        const v = parseInt(r[2] || "0", 10);
-        const key = v === 0 ? "0" : v === 1 ? "1" : "2+";
-        tenunGroups[key].push(r);
+        const key = (r[2] || "").trim();
+        if (tenunGroups[key]) tenunGroups[key].push(r);
       });
       const tenunSunPct = (key) => pct(tenunGroups[key].filter(r => (r[6] || "") === "T").length, tenunGroups[key].length);
       const tenunRainPct = (key) => pct(tenunGroups[key].filter(r => (r[7] || "") === "T").length, tenunGroups[key].length);
@@ -476,9 +475,9 @@ export default function TaoVUI2026() {
 総合判定 採択率: ${pct(judgeCount, N)}
 
 天雲指数別的中率（晴天令）:
-  0: ${tenunSunPct("0")} / 1: ${tenunSunPct("1")} / 2以上: ${tenunSunPct("2+")}
+  0: ${tenunSunPct("0")} / 33: ${tenunSunPct("33")} / 66: ${tenunSunPct("66")} / 100: ${tenunSunPct("100")}
 天雲指数別的中率（荒天令）:
-  0: ${tenunRainPct("0")} / 1: ${tenunRainPct("1")} / 2以上: ${tenunRainPct("2+")}
+  0: ${tenunRainPct("0")} / 33: ${tenunRainPct("33")} / 66: ${tenunRainPct("66")} / 100: ${tenunRainPct("100")}
 
 開催場別的中率TOP3（晴天令）:
   ${top3Sun || "データ不足"}
@@ -731,7 +730,7 @@ AIエージェント群の判断権限が最上位承認者に移譲される
       }}>
         <div style={{ fontSize: "10px", letterSpacing: "4px", color: "rgba(255,255,255,0.25)", marginBottom: "2px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span>SYSTEM:TAO · DEMO</span>
-          <span style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "1px", color: "rgba(255,255,255,0.2)" }}>v0.1.2.3</span>
+          <span style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "1px", color: "rgba(255,255,255,0.2)" }}>v0.1.2.4</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <div
