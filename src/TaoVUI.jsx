@@ -453,9 +453,21 @@ export default function TaoVUI2026() {
 
       // 平均オッズ的中時 (N=index13, O=index14, P=index15)
       const avgOdds = (col, hitRows) => {
-        const vals = hitRows.map(r => parseFloat((r[col] || "0").replace(",", ""))).filter(v => !isNaN(v) && v > 0);
-        return vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : "-";
+        const vals = hitRows.map(r => parseFloat((r[col] || "").replace(",", ""))).filter(v => !isNaN(v) && v > 0);
+        return vals.length ? { avg: (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1), n: vals.length } : null;
       };
+      const fmtOdds = (col, hitRows) => {
+        const r = avgOdds(col, hitRows);
+        return r ? `${r.avg}倍` : "データなし";
+      };
+      const oddsLine = (() => {
+        const parts = [
+          ["3連単", avgOdds(13, sunHit)],
+          ["3連複", avgOdds(14, sunHit)],
+          ["2車単", avgOdds(15, sunHit)],
+        ].map(([name, r]) => `${name} ${r ? r.avg + "倍" : "データなし"}`).join(" / ");
+        return parts;
+      })();
 
       const summary = `【直近${N}R成績サマリー】
 総レース数: ${N}
@@ -473,8 +485,7 @@ export default function TaoVUI2026() {
 開催場別的中率TOP3（荒天令）:
   ${top3Rain || "データ不足"}
 
-平均オッズ（的中時）:
-  3連単: ${avgOdds(13, sunHit)}倍 / 3連複: ${avgOdds(14, sunHit)}倍 / 2車単: ${avgOdds(15, sunHit)}倍`;
+平均オッズ（的中時）: ${oddsLine}`;
 
       return summary;
     } catch (e) {
@@ -720,7 +731,7 @@ AIエージェント群の判断権限が最上位承認者に移譲される
       }}>
         <div style={{ fontSize: "10px", letterSpacing: "4px", color: "rgba(255,255,255,0.25)", marginBottom: "2px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span>SYSTEM:TAO · DEMO</span>
-          <span style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "1px", color: "rgba(255,255,255,0.2)" }}>v0.1.2.2</span>
+          <span style={{ fontFamily: "monospace", fontSize: "9px", letterSpacing: "1px", color: "rgba(255,255,255,0.2)" }}>v0.1.2.3</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <div
